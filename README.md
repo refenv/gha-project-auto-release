@@ -3,7 +3,7 @@
 [![test](https://github.com/refenv/gha-project-auto-release/actions/workflows/test.yml/badge.svg)](https://github.com/refenv/gha-project-auto-release/actions/workflows/test.yml)
 [![release](https://img.shields.io/github/v/release/refenv/gha-project-auto-release?sort=semver)](https://github.com/refenv/gha-project-auto-release/releases)
 [![license](https://img.shields.io/github/license/refenv/gha-project-auto-release)](LICENSE)
-[![REUSE](https://img.shields.io/badge/REUSE-compliant-green)](https://reuse.software/)
+[![REUSE status](https://api.reuse.software/badge/github.com/refenv/gha-project-auto-release)](https://api.reuse.software/info/github.com/refenv/gha-project-auto-release)
 
 Release a project when a commit with the subject `ver: bump to v<version>`
 lands on its main branch, from the tree its pull request's checks ran on.
