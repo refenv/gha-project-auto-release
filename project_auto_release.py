@@ -39,7 +39,7 @@ def run(*cmd: str) -> str:
 
 
 def succeeds(*cmd: str) -> bool:
-    return subprocess.run(cmd, capture_output=True).returncode == 0
+    return subprocess.run(cmd, check=False, capture_output=True).returncode == 0
 
 
 def output(**values) -> None:
