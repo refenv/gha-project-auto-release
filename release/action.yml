@@ -1,0 +1,70 @@
+name: Project auto-release, release
+description: >-
+  Tag a version bump on main, create its GitHub Release, attach assets, move the
+  major tag, and dispatch workflows on the tag
+
+inputs:
+  version:
+    description: The version, the version output of the check action
+    required: true
+  notes-file:
+    description: The file holding the release's notes, the notes-file output of the check action; empty lets GitHub generate the notes
+    required: false
+    default: ''
+  title:
+    description: >-
+      The release's title, in which {version} and {tag} are replaced, such as
+      'Release Notes: {tag}'
+    required: false
+    default: '{tag}'
+  assets:
+    description: Files to attach to the release, one path or glob per line; an attachment of the same name is replaced
+    required: false
+    default: ''
+  major-tag:
+    description: Move the tag of the major version, such as v1, to the release, 'true' or 'false'
+    required: false
+    default: 'false'
+  dispatch:
+    description: >-
+      Workflows to run on the release's tag, one per line as the workflow file
+      and its inputs, such as 'verify.yml job=docgen', in which {version} and
+      {tag} are replaced; a tag created with the workflow token triggers no push
+      event
+    required: false
+    default: ''
+  token:
+    description: The token for the GitHub API
+    required: false
+    default: ${{ github.token }}
+  repository:
+    description: The repository, as owner/name
+    required: false
+    default: ${{ github.repository }}
+  sha:
+    description: The commit to release
+    required: false
+    default: ${{ github.sha }}
+
+outputs:
+  tag:
+    description: The release's tag, such as v1.2.3
+    value: ${{ steps.release.outputs.tag }}
+
+runs:
+  using: composite
+  steps:
+  - name: Release
+    id: release
+    shell: bash
+    env:
+      GH_TOKEN: ${{ inputs.token }}
+      PAR_VERSION: ${{ inputs.version }}
+      PAR_NOTES_FILE: ${{ inputs.notes-file }}
+      PAR_TITLE: ${{ inputs.title }}
+      PAR_ASSETS: ${{ inputs.assets }}
+      PAR_MAJOR_TAG: ${{ inputs.major-tag }}
+      PAR_DISPATCH: ${{ inputs.dispatch }}
+      PAR_REPOSITORY: ${{ inputs.repository }}
+      PAR_SHA: ${{ inputs.sha }}
+    run: python3 "$GITHUB_ACTION_PATH/../project_auto_release.py" release

@@ -1,0 +1,46 @@
+name: Project auto-release, ready
+description: >-
+  On a pull request whose last commit is 'ver: bump to v<version>', check that
+  the bump is complete and that the branch is not behind its base
+
+inputs:
+  version-file:
+    description: The file that carries the project's version, such as 'src/foo/__init__.py'
+    required: true
+  version-pattern:
+    description: A Python regular expression whose first group captures the version in version-file, such as '^__version__ = "([^"]+)"$'
+    required: true
+  changelog:
+    description: The changelog that must have a '## <version>' section; empty requires none
+    required: false
+    default: CHANGELOG.md
+  sha:
+    description: The pull request's head commit
+    required: false
+    default: ${{ github.event.pull_request.head.sha }}
+  base:
+    description: The branch the pull request merges into
+    required: false
+    default: ${{ github.base_ref }}
+
+outputs:
+  release:
+    description: Whether merging the pull request releases, 'true' or 'false'
+    value: ${{ steps.ready.outputs.release }}
+  version:
+    description: The version it releases, such as 1.2.3, or empty
+    value: ${{ steps.ready.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+  - name: Check the release pull request
+    id: ready
+    shell: bash
+    env:
+      PAR_VERSION_FILE: ${{ inputs.version-file }}
+      PAR_VERSION_PATTERN: ${{ inputs.version-pattern }}
+      PAR_CHANGELOG: ${{ inputs.changelog }}
+      PAR_SHA: ${{ inputs.sha }}
+      PAR_BASE: ${{ inputs.base }}
+    run: python3 "$GITHUB_ACTION_PATH/../project_auto_release.py" ready

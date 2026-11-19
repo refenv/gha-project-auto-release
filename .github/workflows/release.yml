@@ -1,0 +1,41 @@
+---
+name: release
+
+# This repository releases with its own actions, from the commit being released
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      startsWith(github.event.head_commit.message, 'ver: bump to v')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: read
+    steps:
+    - uses: actions/checkout@v7
+    - name: Check the version bump
+      id: check
+      uses: ./check
+      with:
+        version-file: VERSION
+        version-pattern: '^(\S+)$'
+        workflows: test.yml
+        jobs: |
+          test.yml: lint
+          test.yml: unittest
+          test.yml: check
+          test.yml: ready
+    - name: Release, and move the major tag
+      uses: ./release
+      with:
+        version: ${{ steps.check.outputs.version }}
+        notes-file: ${{ steps.check.outputs.notes-file }}
+        major-tag: 'true'

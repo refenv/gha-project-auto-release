@@ -1,0 +1,85 @@
+---
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - name: Check the workflows and actions
+      uses: docker://rhysd/actionlint:1.7.12
+      with:
+        args: -color
+    - name: Check the Python
+      run: |
+        pipx run ruff check .
+        pipx run ruff format --check .
+    - name: Check REUSE compliance
+      uses: fsfe/reuse-action@v6
+
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - name: Run the unit tests
+      run: python3 -m unittest discover -v -s tests
+
+  # The check action against a release made already, refenv/cijoe v0.9.70: a
+  # bump merged from #243, whose head passed verify_and_publish.yml
+  check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        path: action
+    - uses: actions/checkout@v7
+      with:
+        repository: refenv/cijoe
+        ref: a882bb4bd88ecab20584bd0d8ee095a67a1b7792
+    - name: Check
+      id: check
+      uses: ./action/check
+      with:
+        repository: refenv/cijoe
+        sha: a882bb4bd88ecab20584bd0d8ee095a67a1b7792
+        version-file: src/cijoe/core/__init__.py
+        version-pattern: '^__version__ = "([^"]+)"$'
+        workflows: verify_and_publish.yml
+        jobs: |
+          verify_and_publish.yml: build
+          verify_and_publish.yml: unittest
+    - name: Check the outputs
+      env:
+        VERSION: ${{ steps.check.outputs.version }}
+        RELEASED: ${{ steps.check.outputs.released }}
+        PR: ${{ steps.check.outputs.pr }}
+        RUN: ${{ fromJSON(steps.check.outputs.runs)['verify_and_publish.yml'] }}
+        NOTES: ${{ steps.check.outputs.notes-file }}
+      run: |
+        [ "$VERSION" = "0.9.70" ]
+        [ "$RELEASED" = "true" ]
+        [ "$PR" = "243" ]
+        [ "$RUN" = "41178499686" ]
+        test -s "$NOTES"
+
+  # This repository's own release pull request
+  ready:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - name: Check the release pull request
+      uses: ./ready
+      with:
+        version-file: VERSION
+        version-pattern: '^(\S+)$'

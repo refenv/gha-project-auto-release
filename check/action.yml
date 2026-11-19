@@ -1,0 +1,77 @@
+name: Project auto-release, check
+description: >-
+  Check that a 'ver: bump to v<version>' commit on main is a complete version
+  bump, and that the pull request that merged it was tested on the same tree
+
+inputs:
+  version-file:
+    description: The file that carries the project's version, such as 'src/foo/__init__.py'
+    required: true
+  version-pattern:
+    description: A Python regular expression whose first group captures the version in version-file, such as '^__version__ = "([^"]+)"$'
+    required: true
+  changelog:
+    description: The changelog whose '## <version>' section is the release's notes; empty lets GitHub generate the notes
+    required: false
+    default: CHANGELOG.md
+  workflows:
+    description: The workflow files that must have a successful run on the pull request's head, separated by spaces, such as 'verify.yml'
+    required: true
+  jobs:
+    description: >-
+      Jobs that must have concluded success in those runs, one per line as
+      '<workflow>: <job name>', such as 'verify.yml: ci-result'; a name matches
+      each job of a matrix, 'name (...)', and each job of a reusable workflow
+      it calls, 'name / ...'; a skipped job has not passed
+    required: false
+    default: ''
+  token:
+    description: The token for the GitHub API
+    required: false
+    default: ${{ github.token }}
+  repository:
+    description: The repository, as owner/name
+    required: false
+    default: ${{ github.repository }}
+  sha:
+    description: The commit to release
+    required: false
+    default: ${{ github.sha }}
+
+outputs:
+  version:
+    description: The version, such as 1.2.3
+    value: ${{ steps.check.outputs.version }}
+  released:
+    description: Whether its GitHub Release exists already, 'true' or 'false'
+    value: ${{ steps.check.outputs.released }}
+  pr:
+    description: The number of the pull request that merged the commit
+    value: ${{ steps.check.outputs.pr }}
+  pr-head:
+    description: The pull request's head commit, the one its checks ran on
+    value: ${{ steps.check.outputs.pr-head }}
+  runs:
+    description: >-
+      The successful run of each workflow on pr-head, as JSON such as '{"verify.yml": 123}'
+    value: ${{ steps.check.outputs.runs }}
+  notes-file:
+    description: The file holding the release's notes from the changelog, or empty when changelog is
+    value: ${{ steps.check.outputs.notes-file }}
+
+runs:
+  using: composite
+  steps:
+  - name: Check the version bump
+    id: check
+    shell: bash
+    env:
+      GH_TOKEN: ${{ inputs.token }}
+      PAR_VERSION_FILE: ${{ inputs.version-file }}
+      PAR_VERSION_PATTERN: ${{ inputs.version-pattern }}
+      PAR_CHANGELOG: ${{ inputs.changelog }}
+      PAR_WORKFLOWS: ${{ inputs.workflows }}
+      PAR_JOBS: ${{ inputs.jobs }}
+      PAR_REPOSITORY: ${{ inputs.repository }}
+      PAR_SHA: ${{ inputs.sha }}
+    run: python3 "$GITHUB_ACTION_PATH/../project_auto_release.py" check
