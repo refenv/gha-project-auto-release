@@ -22,8 +22,8 @@ jobs:
         args: -color
     - name: Check the Python
       run: |
-        pipx run ruff check .
-        pipx run ruff format --check .
+        pipx run ruff==0.15.20 check --extend-select EXE,PLW .
+        pipx run ruff==0.15.20 format --check .
     - name: Check REUSE compliance
       uses: fsfe/reuse-action@v6
 
@@ -35,17 +35,18 @@ jobs:
       run: python3 -m unittest discover -v -s tests
 
   # The check action against a release made already, refenv/cijoe v0.9.70: a
-  # bump merged from #243, whose head passed verify_and_publish.yml
+  # bump merged from #243, whose head passed verify_and_publish.yml. cijoe is
+  # checked out first, as a checkout into the workspace root cleans it.
   check:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
       with:
-        path: action
-    - uses: actions/checkout@v7
-      with:
         repository: refenv/cijoe
         ref: a882bb4bd88ecab20584bd0d8ee095a67a1b7792
+    - uses: actions/checkout@v7
+      with:
+        path: action
     - name: Check
       id: check
       uses: ./action/check
