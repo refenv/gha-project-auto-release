@@ -3,6 +3,14 @@
 Each release has a section here, named by its version, such as `## 1.0.0`;
 that section is the text of its release on GitHub.
 
+## 1.0.1
+
+`check` takes only a pull_request run of each workflow on the pull request's
+head. It took the newest successful run of any event, so a run of the same
+commit dispatched by hand could be released from in place of the pull
+request's own. The README's example workflow parses: its `if:` is now a
+folded scalar.
+
 ## 1.0.0
 
 The first release. Three actions release a project when a commit with the
