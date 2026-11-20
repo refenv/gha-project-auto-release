@@ -21,7 +21,8 @@ concurrency:
 
 jobs:
   release:
-    if: startsWith(github.event.head_commit.message, 'ver: bump to v')
+    if: >-
+      startsWith(github.event.head_commit.message, 'ver: bump to v')
     runs-on: ubuntu-latest
     permissions:
       actions: read

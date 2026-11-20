@@ -31,6 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
+    - name: Install PyYAML, to parse the README's examples
+      run: python3 -m pip install --user pyyaml==6.0.2
     - name: Run the unit tests
       run: python3 -m unittest discover -v -s tests
 
