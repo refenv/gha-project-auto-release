@@ -36,14 +36,20 @@ What 1.2.3 brings.
 What came before.
 """
 
-# Answers 'gh api .../pulls' with $FAKE_PR, 'gh run list' with $FAKE_RUN, 'gh run
+# Answers 'gh api .../pulls' with $FAKE_PR, 'gh run list' with $FAKE_RUN, or with
+# $FAKE_OTHER_RUN when it is set and the list is not of pull_request runs, 'gh run
 # view' with $FAKE_JOBS, and 'gh release view' with success when $FAKE_RELEASED is
 # 'true'
 FAKE_GH = """#!/usr/bin/env bash
 echo "$*" >> "$FAKE_LOG"
 case "$1 $2" in
   "api "*) echo "$FAKE_PR" ;;
-  "run list") echo "$FAKE_RUN" ;;
+  "run list")
+    if [[ -n "$FAKE_OTHER_RUN" && " $* " != *" --event pull_request "* ]]; then
+      echo "$FAKE_OTHER_RUN"
+    else
+      echo "$FAKE_RUN"
+    fi ;;
   "run view") printf '%b' "$FAKE_JOBS" ;;
   "release view") [ "$FAKE_RELEASED" = "true" ] ;;
 esac
@@ -284,6 +290,12 @@ class Check(Project):
             f"run list --repo owner/foo --workflow test.yml --commit {head}",
             "\n".join(self.gh_calls()),
         )
+
+    def test_a_run_not_of_the_pull_request_is_not_taken(self):
+        self.merged()
+        code, stdout, outputs = self.call("check", FAKE_OTHER_RUN="99")
+        self.assertEqual(code, 0, stdout)
+        self.assertEqual(outputs["runs"], '{"verify.yml": 42, "test.yml": 42}')
 
     def test_released_already(self):
         self.merged()

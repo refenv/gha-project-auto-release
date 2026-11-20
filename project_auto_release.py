@@ -191,9 +191,9 @@ def passed(repo: str, workflow: str, run_id: int, names: list[str]) -> None:
 
 
 def tested(repo: str, sha: str, workflows: list[str], jobs: list[tuple[str, str]]):
-    """The pull request that merged sha, its head, and a successful run of each
-    workflow on that head in which each of jobs passed; raises Refusal when the
-    head's tree is not sha's"""
+    """The pull request that merged sha, its head, and a successful pull_request
+    run of each workflow on that head in which each of jobs passed; raises Refusal
+    when the head's tree is not sha's"""
 
     pr = run(
         "gh", "api", f"repos/{repo}/commits/{sha}/pulls", "--jq", ".[0].number // empty"
@@ -213,7 +213,8 @@ def tested(repo: str, sha: str, workflows: list[str], jobs: list[tuple[str, str]
     for workflow in workflows:
         found = run(
             "gh", "run", "list", "--repo", repo, "--workflow", workflow,
-            "--commit", head, "--status", "success", "--limit", "1",
+            "--commit", head, "--event", "pull_request",
+            "--status", "success", "--limit", "1",
             "--json", "databaseId", "--jq", ".[0].databaseId // empty",
         ).strip()  # fmt: skip
         if not found:
