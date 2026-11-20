@@ -93,9 +93,10 @@ On main, it checks that the commit is a complete version bump: its subject
 names the version, `version-file` carries it, and `changelog` has a section
 for it. It then requires that the pull request that merged the commit has the
 same tree, and finds a successful run of each of `workflows` on its head, in
-which each of `jobs` concluded success. A job that was skipped has not passed,
-so a job behind a condition, such as a hardware test opened by a label, must
-have run.
+which each of `jobs` concluded success. Only a run for the pull request
+counts, not a run of the same commit dispatched by hand or pushed to a branch.
+A job that was skipped has not passed, so a job behind a condition, such as a
+hardware test opened by a label, must have run.
 
 | Input             | Default            | Description |
 |-------------------|--------------------|-------------|
