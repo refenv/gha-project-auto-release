@@ -51,8 +51,10 @@ registry, goes between the two steps, and can use the build the pull request
 tested: the `runs` output names the run to download its artifacts from.
 
 A failed or cancelled release job can be run again. A tag of the same commit
-and a release that exists are taken as done; a tag of another commit fails
-the job.
+and a release that exists are taken as done; a tag of another commit fails the
+job. A request GitHub answers with an HTTP 5xx is repeated after 5, 15 and 45
+seconds before the job fails, except creating the release and dispatching a
+workflow, which may have taken effect.
 
 ## The actions
 

@@ -25,6 +25,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 SUBJECT = re.compile(r"^ver: bump to v(\S+)$")
@@ -34,12 +35,37 @@ class Refusal(Exception):
     """A reason the release does not go ahead"""
 
 
-def run(*cmd: str) -> str:
-    return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
+# Seconds to wait before each repeat of a command GitHub answered with a 5xx
+RETRY_DELAYS = (5, 15, 45)
 
 
-def succeeds(*cmd: str) -> bool:
-    return subprocess.run(cmd, check=False, capture_output=True).returncode == 0
+def attempt(cmd: tuple[str, ...], retry: bool) -> subprocess.CompletedProcess:
+    """Run cmd; with retry, repeat it after each of RETRY_DELAYS while gh fails
+    with an HTTP 5xx, which GitHub returns for a request it may succeed on later.
+    Only a command that is safe to repeat may retry"""
+
+    for delay in (*RETRY_DELAYS, None) if retry else (None,):
+        result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+        if result.returncode == 0 or delay is None:
+            break
+        if not re.search(r"\bHTTP 5\d\d\b", result.stderr):
+            break
+        print(f"::warning::{' '.join(cmd)}: {result.stderr.strip()}; again in {delay}s")
+        time.sleep(delay)
+    return result
+
+
+def run(*cmd: str, retry: bool = False) -> str:
+    result = attempt(cmd, retry)
+    if result.returncode:
+        raise subprocess.CalledProcessError(
+            result.returncode, cmd, result.stdout, result.stderr
+        )
+    return result.stdout
+
+
+def succeeds(*cmd: str, retry: bool = False) -> bool:
+    return attempt(cmd, retry).returncode == 0
 
 
 def output(**values) -> None:
@@ -170,7 +196,7 @@ def passed(repo: str, workflow: str, run_id: int, names: list[str]) -> None:
     conclusions = {}
     for line in run(
         "gh", "run", "view", str(run_id), "--repo", repo, "--json", "jobs",
-        "--jq", ".jobs[] | [.name, .conclusion] | @tsv",
+        "--jq", ".jobs[] | [.name, .conclusion] | @tsv", retry=True,
     ).splitlines():  # fmt: skip
         job, _, conclusion = line.partition("\t")
         conclusions[job] = conclusion
@@ -196,8 +222,9 @@ def tested(repo: str, sha: str, workflows: list[str], jobs: list[tuple[str, str]
     when the head's tree is not sha's"""
 
     pr = run(
-        "gh", "api", f"repos/{repo}/commits/{sha}/pulls", "--jq", ".[0].number // empty"
-    ).strip()
+        "gh", "api", f"repos/{repo}/commits/{sha}/pulls", "--jq", ".[0].number // empty",
+        retry=True,
+    ).strip()  # fmt: skip
     if not pr:
         raise Refusal(f"no pull request merged {sha[:12]}; release by merging one")
 
@@ -215,7 +242,7 @@ def tested(repo: str, sha: str, workflows: list[str], jobs: list[tuple[str, str]
             "gh", "run", "list", "--repo", repo, "--workflow", workflow,
             "--commit", head, "--event", "pull_request",
             "--status", "success", "--limit", "1",
-            "--json", "databaseId", "--jq", ".[0].databaseId // empty",
+            "--json", "databaseId", "--jq", ".[0].databaseId // empty", retry=True,
         ).strip()  # fmt: skip
         if not found:
             raise Refusal(f"no successful {workflow} run of #{pr}'s head, {head[:12]}")
@@ -270,7 +297,9 @@ def check(env) -> None:
         sha, env["PAR_VERSION_FILE"], env["PAR_VERSION_PATTERN"], env["PAR_CHANGELOG"]
     )
     untagged_elsewhere(f"v{version}", sha)
-    released = succeeds("gh", "release", "view", f"v{version}", "--repo", repo)
+    released = succeeds(
+        "gh", "release", "view", f"v{version}", "--repo", repo, retry=True
+    )
     pr, head, runs = tested(repo, sha, workflows, jobs)
 
     notes_file = ""
@@ -312,7 +341,7 @@ def release(env) -> None:
             raise Refusal(f"dispatch of {workflow}: an input is not 'name=value'")
     untagged_elsewhere(tag, sha)
 
-    if succeeds("gh", "release", "view", tag, "--repo", repo):
+    if succeeds("gh", "release", "view", tag, "--repo", repo, retry=True):
         print(f"{tag} is released already")
     else:
         notes = env.get("PAR_NOTES_FILE", "")
@@ -330,7 +359,10 @@ def release(env) -> None:
                 raise Refusal(f"no file matches the asset {pattern.strip()!r}")
             assets += found
     if assets:
-        run("gh", "release", "upload", tag, "--repo", repo, "--clobber", *assets)
+        run(
+            "gh", "release", "upload", tag, "--repo", repo, "--clobber", *assets,
+            retry=True,
+        )  # fmt: skip
         print(f"Attached {' '.join(Path(a).name for a in assets)}")
 
     if env.get("PAR_MAJOR_TAG") == "true":
