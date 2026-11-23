@@ -13,6 +13,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -39,9 +40,16 @@ What came before.
 # Answers 'gh api .../pulls' with $FAKE_PR, 'gh run list' with $FAKE_RUN, or with
 # $FAKE_OTHER_RUN when it is set and the list is not of pull_request runs, 'gh run
 # view' with $FAKE_JOBS, and 'gh release view' with success when $FAKE_RELEASED is
-# 'true'
+# 'true'. The first $FAKE_FAILS calls of '$FAKE_FAIL_ON' fail with $FAKE_ERROR.
 FAKE_GH = """#!/usr/bin/env bash
 echo "$*" >> "$FAKE_LOG"
+if [[ "$1 $2" == "$FAKE_FAIL_ON" ]]; then
+  failed=$(grep -c "^$FAKE_FAIL_ON" "$FAKE_LOG")
+  if (( failed <= FAKE_FAILS )); then
+    echo "$FAKE_ERROR" >&2
+    exit 1
+  fi
+fi
 case "$1 $2" in
   "api "*) echo "$FAKE_PR" ;;
   "run list")
@@ -95,6 +103,9 @@ class Project(unittest.TestCase):
             "FAKE_RUN": "",
             "FAKE_JOBS": "",
             "FAKE_RELEASED": "false",
+            "FAKE_FAIL_ON": "",
+            "FAKE_FAILS": "0",
+            "FAKE_ERROR": "HTTP 502: Server Error (https://api.github.com/...)",
             "GITHUB_OUTPUT": str(self.out),
             "RUNNER_TEMP": str(self.tmp),
             "PAR_VERSION_FILE": "src/foo/__init__.py",
@@ -137,6 +148,66 @@ class Project(unittest.TestCase):
 
     def gh_calls(self):
         return self.log.read_text().splitlines()
+
+
+@mock.patch.object(par, "RETRY_DELAYS", (0, 0, 0))
+class Retry(Project):
+    def setUp(self):
+        super().setUp()
+        self.sha = self.commit("ver: bump to v1.2.3", version="1.2.3")
+        git(self.work, "push", "-q", "origin", "HEAD:main")
+        self.env.update(PAR_SHA=self.sha, PAR_VERSION="1.2.3")
+
+    def calls_of(self, command):
+        return [c for c in self.gh_calls() if c.startswith(command)]
+
+    def test_a_read_is_repeated_while_github_answers_5xx(self):
+        code, stdout, _ = self.call(
+            "release", FAKE_FAIL_ON="release view", FAKE_FAILS="2", FAKE_RELEASED="true"
+        )
+        self.assertEqual(code, 0, stdout)
+        self.assertEqual(len(self.calls_of("release view")), 3)
+        self.assertEqual(stdout.count("::warning::"), 2)
+        self.assertFalse(self.calls_of("release create"))
+
+    def test_a_read_fails_once_the_repeats_are_spent(self):
+        code, stdout, _ = self.call(
+            "release",
+            FAKE_FAIL_ON="release upload",
+            FAKE_FAILS="9",
+            PAR_ASSETS=__file__,
+        )
+        self.assertEqual(code, 1, stdout)
+        self.assertEqual(len(self.calls_of("release upload")), 4)
+        self.assertIn("::error::gh release upload", stdout)
+
+    def test_an_error_other_than_5xx_is_not_repeated(self):
+        code, stdout, _ = self.call(
+            "release",
+            FAKE_FAIL_ON="release upload",
+            FAKE_FAILS="9",
+            FAKE_ERROR="HTTP 404: Not Found",
+            PAR_ASSETS=__file__,
+        )
+        self.assertEqual(code, 1, stdout)
+        self.assertEqual(len(self.calls_of("release upload")), 1)
+
+    def test_a_create_is_not_repeated(self):
+        code, stdout, _ = self.call(
+            "release", FAKE_FAIL_ON="release create", FAKE_FAILS="9"
+        )
+        self.assertEqual(code, 1, stdout)
+        self.assertEqual(len(self.calls_of("release create")), 1)
+
+    def test_a_dispatch_is_not_repeated(self):
+        code, stdout, _ = self.call(
+            "release",
+            FAKE_FAIL_ON="workflow run",
+            FAKE_FAILS="9",
+            PAR_DISPATCH="verify.yml",
+        )
+        self.assertEqual(code, 1, stdout)
+        self.assertEqual(len(self.calls_of("workflow run")), 1)
 
 
 class Parsing(unittest.TestCase):
