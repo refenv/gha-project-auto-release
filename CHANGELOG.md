@@ -3,6 +3,13 @@
 Each release has a section here, named by its version, such as `## 1.0.0`;
 that section is the text of its release on GitHub.
 
+## 1.0.2
+
+A request to GitHub that fails with an HTTP 5xx is repeated after 5, 15 and 45
+seconds before the job fails, where repeating it is safe: every read, and
+attaching assets. Creating the release and dispatching a workflow are not
+repeated.
+
 ## 1.0.1
 
 `check` takes only a pull_request run of each workflow on the pull request's
